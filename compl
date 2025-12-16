@@ -1,11 +1,48 @@
 #!/bin/bash
 
+_g_unstaged_files_relative() {
+    local repo_root rel_prefix file
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || return
+    rel_prefix="${PWD#$repo_root/}"
+
+    local files=()
+    while IFS= read -r file; do
+        if [[ -z "$rel_prefix" ]]; then
+            files+=("$file")
+        elif [[ "$file" == "$rel_prefix/"* ]]; then
+            files+=("${file#$rel_prefix/}")
+        fi
+    done < <({
+        git diff --name-only
+        git ls-files --others --exclude-standard
+    } 2>/dev/null | sort -u)
+
+    printf '%s\n' "${files[@]}"
+}
+
+_g_staged_files_relative() {
+    local repo_root rel_prefix file
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || return
+    rel_prefix="${PWD#$repo_root/}"
+
+    local files=()
+    while IFS= read -r file; do
+        if [[ -z "$rel_prefix" ]]; then
+            files+=("$file")
+        elif [[ "$file" == "$rel_prefix/"* ]]; then
+            files+=("${file#$rel_prefix/}")
+        fi
+    done < <(git diff --cached --name-only 2>/dev/null)
+
+    printf '%s\n' "${files[@]}"
+}
+
 _g_completion() {
     local cur prev_word
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev_word="${COMP_WORDS[COMP_CWORD-1]}"
 
-    local top_level_commands="apply join diff undo info branch remote tag stage new list ls rm edit update send conflict git . .. ,."
+    local top_level_commands="doc: feat: fix: ref: test: apply join diff undo info branch remote tag stage new list ls rm edit update send conflict git . .. ,."
 
     local branch_subcommands="new list ls rm send rename rebase ff merge"
 
@@ -73,19 +110,14 @@ _g_completion() {
                     ;;
                 .)
                     local unstaged_files
-                    unstaged_files=$(
-                        {
-                            git diff --name-only;
-                            git ls-files --others --exclude-standard;
-                        } 2>/dev/null | sort -u
-                    )
+                    unstaged_files=$(_g_unstaged_files_relative)
                     COMPREPLY=( $(compgen -W "${unstaged_files}" -- "${cur}") )
                     ;;
                 ..)
                     local staged_files
-                    staged_files=$(git diff --cached --name-only 2>/dev/null)
+                    staged_files=$(_g_staged_files_relative)
                     COMPREPLY=( $(compgen -W "${staged_files}" -- "${cur}") )
-                    ;;
+                    ;; 
                 force)
                     local remote_branches2
                     remote_branches2=$(git branch -r 2>/dev/null | sed 's/origin\///g' | grep -v 'HEAD')
@@ -211,6 +243,16 @@ _g_completion() {
                             ;;
                     esac
                     ;;
+                .)
+                    local unstaged_files
+                    unstaged_files=$(_g_unstaged_files_relative)
+                    COMPREPLY=( $(compgen -W "${unstaged_files}" -- "${cur}") )
+                    ;;
+                ..)
+                    local staged_files
+                    staged_files=$(_g_staged_files_relative)
+                    COMPREPLY=( $(compgen -W "${staged_files}" -- "${cur}") )
+                    ;;
             esac
             ;;
         4)
@@ -220,6 +262,18 @@ _g_completion() {
             elif [[ "${COMP_WORDS[1]}" == "remote" && "${COMP_WORDS[2]}" == "update" ]]; then
                 COMPREPLY=( $(compgen -W "--name --url" -- "${cur}") )
             fi
+            case "${COMP_WORDS[1]}" in
+                .)
+                    local unstaged_files
+                    unstaged_files=$(_g_unstaged_files_relative)
+                    COMPREPLY=( $(compgen -W "${unstaged_files}" -- "${cur}") )
+                    ;;
+                ..)
+                    local staged_files
+                    staged_files=$(_g_staged_files_relative)
+                    COMPREPLY=( $(compgen -W "${staged_files}" -- "${cur}") )
+                    ;;
+            esac
             ;;
         *)
             case "${COMP_WORDS[1]}" in
@@ -275,19 +329,14 @@ _g_completion() {
                     ;;
                 .)
                     local unstaged_files
-                    unstaged_files=$(
-                        {
-                            git diff --name-only;
-                            git ls-files --others --exclude-standard;
-                        } 2>/dev/null | sort -u
-                    )
+                    unstaged_files=$(_g_unstaged_files_relative)
                     COMPREPLY=( $(compgen -W "${unstaged_files}" -- "${cur}") )
                     ;;
                 ..)
                     local staged_files
-                    staged_files=$(git diff --cached --name-only 2>/dev/null)
+                    staged_files=$(_g_staged_files_relative)
                     COMPREPLY=( $(compgen -W "${staged_files}" -- "${cur}") )
-                    ;;
+                    ;; 
                 *)
                     ;;
             esac
