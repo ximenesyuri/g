@@ -42,14 +42,15 @@ _g_completion() {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev_word="${COMP_WORDS[COMP_CWORD-1]}"
 
-    local top_level_commands="doc: feat: fix: ref: test: apply join diff undo info branch remote tag stage new list ls rm edit update send conflict git . .. ,."
+    local top_level_commands="--help doc: feat: fix: ref: test: apply join diff undo info branch remote tag stage new list ls rm edit update send conflict git . .. ,."
 
-    local branch_subcommands="new list ls rm send rename rebase ff merge"
+    local branch_subcommands="new list rm send rename rebase ff merge --help"
 
-    local tag_subcommands="new list ls rm send update"
-    local tag_new_types="patch minor major"
+    local tag_subcommands="new list rm send update --help"
+    local tag_new_types="patch minor major --help"
 
-    local stage_subcommands="add list ls rm"
+    local stage_subcommands="add list rm --help"
+    local conflict_subcommands="list resolve diff --help"
 
     case "${COMP_CWORD}" in
         1)
@@ -67,11 +68,14 @@ _g_completion() {
                     ;;
                 conflict)
                     local branches
-                    branches=$(git branch --format="%(refname:short)" 2>/dev/null)
-                    COMPREPLY=( $(compgen -W "ls resolve diff HEAD ${branches}" -- "${cur}") )
+                    COMPREPLY=( $(compgen -W "${conflict_subcommands}" -- "${cur}") )
                     ;;
                 undo)
-                    COMPREPLY=( $(compgen -W "1 2 3 4 5" -- "${cur}") )
+                    local staged_files unstaged_files candidates
+                    staged_files=$(_g_staged_files_relative)
+                    unstaged_files=$(_g_unstaged_files_relative)
+                    candidates="${staged_files} ${unstaged_files}"
+                    COMPREPLY=( $(compgen -W "${candidates}" -- "${cur}") )
                     ;;
                 branch)
                     local existing_branches
