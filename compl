@@ -1,0 +1,298 @@
+#!/bin/bash
+
+_g_completion() {
+    local cur prev_word
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev_word="${COMP_WORDS[COMP_CWORD-1]}"
+
+    local top_level_commands="apply join diff undo info branch remote tag stage new list ls rm edit update send conflict git . .. ,."
+
+    local branch_subcommands="new list ls rm send rename rebase ff merge"
+
+    local tag_subcommands="new list ls rm send update"
+    local tag_new_types="patch minor major"
+
+    local stage_subcommands="add list ls rm"
+
+    case "${COMP_CWORD}" in
+        1)
+            COMPREPLY=( $(compgen -W "${top_level_commands}" -- "${cur}") )
+            ;;
+        2)
+            case "${prev_word}" in
+                ff|push|pull)
+                    if [[ "${prev_word}" == "ff" || "${prev_word}" == "push" || "${prev_word}" == "pull" ]]; then
+                        local remote_branches
+                        remote_branches=$(git branch -r 2>/dev/null | sed 's/origin\///g' | grep -v 'HEAD')
+                        COMPREPLY=( $(compgen -W "${remote_branches}" -- "${cur}") )
+                    fi
+                    COMPREPLY+=( $(compgen -f -d -- "${cur}") )
+                    ;;
+                conflict)
+                    local branches
+                    branches=$(git branch --format="%(refname:short)" 2>/dev/null)
+                    COMPREPLY=( $(compgen -W "ls resolve diff HEAD ${branches}" -- "${cur}") )
+                    ;;
+                undo)
+                    COMPREPLY=( $(compgen -W "1 2 3 4 5" -- "${cur}") )
+                    ;;
+                branch)
+                    local existing_branches
+                    existing_branches=$(git branch --format="%(refname:short)" 2>/dev/null)
+                    COMPREPLY=( $(compgen -W "${branch_subcommands} ${existing_branches}" -- "${cur}") )
+                    ;;
+                send)
+                    local branches
+                    branches=$(git branch --format="%(refname:short)" 2>/dev/null)
+                    COMPREPLY=( $(compgen -W "-f --force ${branches}" -- "${cur}") )
+                    ;;
+                remote)
+                    COMPREPLY=( $(compgen -W "new list ls rm update" -- "${cur}") )
+                    ;;
+                tag|tags)
+                    COMPREPLY=( $(compgen -W "${tag_subcommands}" -- "${cur}") )
+                    ;;
+                apply)
+                    COMPREPLY=( $(compgen -W "-d --delete" -- "${cur}") )
+                    ;;
+                stage|staged)
+                    COMPREPLY=( $(compgen -W "${stage_subcommands}" -- "${cur}") )
+                    ;;
+                ls|list)
+                    COMPREPLY=( $(compgen -W "10 20 30" -- "${cur}") )
+                    ;;
+                rm)
+                    local hashes
+                    hashes=$(git log --pretty=format:'%h' -n 50 2>/dev/null)
+                    COMPREPLY=( $(compgen -W "${hashes}" -- "${cur}") )
+                    ;;
+                rebase)
+                    local remote_branches
+                    remote_branches=$(git branch -r 2>/dev/null | sed 's/origin\///g' | grep -v 'HEAD')
+                    COMPREPLY=( $(compgen -W "1 2 3 4 5 ${remote_branches}" -- "${cur}") )
+                    ;;
+                .)
+                    local unstaged_files
+                    unstaged_files=$(
+                        {
+                            git diff --name-only;
+                            git ls-files --others --exclude-standard;
+                        } 2>/dev/null | sort -u
+                    )
+                    COMPREPLY=( $(compgen -W "${unstaged_files}" -- "${cur}") )
+                    ;;
+                ..)
+                    local staged_files
+                    staged_files=$(git diff --cached --name-only 2>/dev/null)
+                    COMPREPLY=( $(compgen -W "${staged_files}" -- "${cur}") )
+                    ;;
+                force)
+                    local remote_branches2
+                    remote_branches2=$(git branch -r 2>/dev/null | sed 's/origin\///g' | grep -v 'HEAD')
+                    COMPREPLY=( $(compgen -W "${remote_branches2}" -- "${cur}") )
+                    ;;
+                edit)
+                    local nums="0 1 2 3 4 5 10"
+                    local hashes
+                    hashes=$(git log --pretty=format:'%h' -n 50 2>/dev/null)
+                    COMPREPLY=( $(compgen -W "${nums} ${hashes}" -- "${cur}") )
+                    ;;
+                join)
+                    local root_hash root_short hashes
+                    root_hash=$(git rev-list --max-parents=0 HEAD 2>/dev/null | head -n1 || true)
+                    if [ -n "$root_hash" ]; then
+                        root_short=$(git rev-parse --short "$root_hash" 2>/dev/null || true)
+                    fi
+                    hashes=$(git log --pretty=format:'%h' -n 50 2>/dev/null | \
+                             awk -v r="$root_short" 'r=="" || $1 != r')
+                    COMPREPLY=( $(compgen -W "--message ${hashes}" -- "${cur}") )
+                    ;;
+                update)
+                    local nums="0 1 2 3 4 5 10"
+                    local hashes
+                    hashes=$(git log --pretty=format:'%h' -n 50 2>/dev/null)
+                    COMPREPLY=( $(compgen -W "${nums} ${hashes}" -- "${cur}") )
+                    ;;
+                *)
+                    ;;
+            esac
+            ;;
+        3)
+            local grand_prev_word="${COMP_WORDS[COMP_CWORD-2]}"
+            if [[ "${COMP_WORDS[1]}" == "join" ]]; then
+                local root_hash root_short hashes
+                root_hash=$(git rev-list --max-parents=0 HEAD 2>/dev/null | head -n1 || true)
+                if [ -n "$root_hash" ]; then
+                    root_short=$(git rev-parse --short "$root_hash" 2>/dev/null || true)
+                fi
+                hashes=$(git log --pretty=format:'%h' -n 50 2>/dev/null | \
+                         awk -v r="$root_short" 'r=="" || $1 != r')
+                COMPREPLY=( $(compgen -W "--message ${hashes}" -- "${cur}") )
+                return
+            fi
+            case "${grand_prev_word}" in
+                branch)
+                    case "${prev_word}" in
+                        new)
+                            ;;
+                        rm|send)
+                            local local_branches
+                            local_branches=$(git branch --format="%(refname:short)" 2>/dev/null)
+                            COMPREPLY=( $(compgen -W "${local_branches}" -- "${cur}") )
+                            ;;
+                        rename)
+                            local local_branches
+                            local_branches=$(git branch --format="%(refname:short)" 2>/dev/null)
+                            COMPREPLY=( $(compgen -W "${local_branches} --name" -- "${cur}") )
+                            ;;
+                        rebase|ff)
+                            local local_branches
+                            local_branches=$(git branch --format="%(refname:short)" 2>/dev/null)
+                            COMPREPLY=( $(compgen -W "./HEAD ${local_branches} -r --remote" -- "${cur}") )
+                            ;;
+                        merge)
+                            local local_branches
+                            local_branches=$(git branch --format="%(refname:short)" 2>/dev/null)
+                            COMPREPLY=( $(compgen -W "${local_branches} -m --message" -- "${cur}") )
+                            ;;
+                    esac
+                    ;;
+                conflict)
+                    case "${prev_word}" in
+                        ls|resolve|diff)
+                            local files
+                            files=$(git diff --name-only --diff-filter=U 2>/dev/null)
+                            COMPREPLY=( $(compgen -W "${files}" -- "${cur}") )
+                            ;;
+                    esac
+                    ;;
+                remote)
+                    case "${prev_word}" in
+                        new)
+                            COMPREPLY=( $(compgen -W "--name --url" -- "${cur}") )
+                            ;;
+                        rm|update)
+                            local remotes
+                            remotes=$(git remote 2>/dev/null)
+                            COMPREPLY=( $(compgen -W "${remotes}" -- "${cur}") )
+                            ;;
+                    esac
+                    ;;
+                tag|tags)
+                    case "${prev_word}" in
+                        new)
+                            COMPREPLY=( $(compgen -W "${tag_new_types}" -- "${cur}") )
+                            ;;
+                        rm|send)
+                            local existing_tags
+                            existing_tags=$(git tag -l 2>/dev/null)
+                            COMPREPLY=( $(compgen -W "${existing_tags}" -- "${cur}") )
+                            ;;
+                        update)
+                            local existing_tags2
+                            existing_tags2=$(git tag -l 2>/dev/null)
+                            COMPREPLY=( $(compgen -W "${existing_tags2}" -- "${cur}") )
+                            ;;
+                    esac
+                    ;;
+                stage|staged)
+                    case "${prev_word}" in
+                        add|rm)
+                            if [[ "${prev_word}" == "add" ]]; then
+                                local unstaged_files
+                                unstaged_files=$(git status --porcelain 2>/dev/null | awk '{if ($1 !~ /^[MARCU?]/) print $2}')
+                                COMPREPLY=( $(compgen -f -d -W "${unstaged_files}" -- "${cur}") )
+                            fi
+                            if [[ "${prev_word}" == "rm" ]]; then
+                                local staged_files
+                                staged_files=$(git diff --cached --name-only 2>/dev/null)
+                                COMPREPLY=( $(compgen -f -d -W "${staged_files}" -- "${cur}") )
+                            fi
+                            ;;
+                    esac
+                    ;;
+            esac
+            ;;
+        4)
+            if [[ "${COMP_WORDS[1]}" == "tag" || "${COMP_WORDS[1]}" == "tags" ]] && \
+               [[ "${COMP_WORDS[2]}" == "update" ]]; then
+                COMPREPLY=( $(compgen -W "--name --desc --message -m" -- "${cur}") )
+            elif [[ "${COMP_WORDS[1]}" == "remote" && "${COMP_WORDS[2]}" == "update" ]]; then
+                COMPREPLY=( $(compgen -W "--name --url" -- "${cur}") )
+            fi
+            ;;
+        *)
+            case "${COMP_WORDS[1]}" in
+                branch)
+                    case "${COMP_WORDS[2]}" in
+                        rebase|ff)
+                            if [[ "${prev_word}" == "-r" || "${prev_word}" == "--remote" ]]; then
+                                local remotes
+                                remotes=$(git remote 2>/dev/null)
+                                COMPREPLY=( $(compgen -W "${remotes}" -- "${cur}") )
+                            else
+                                local local_branches
+                                local_branches=$(git branch --format="%(refname:short)" 2>/dev/null)
+                                COMPREPLY=( $(compgen -W "./HEAD ${local_branches} -r --remote" -- "${cur}") )
+                            fi
+                            ;;
+                        merge)
+                            if [[ "${prev_word}" == "-m" || "${prev_word}" == "--message" ]]; then
+                                COMPREPLY=()
+                            else
+                                local local_branches
+                                local_branches=$(git branch --format="%(refname:short)" 2>/dev/null)
+                                COMPREPLY=( $(compgen -W "${local_branches} -m --message" -- "${cur}") )
+                            fi
+                            ;;
+                        rename)
+                            if [[ "${prev_word}" == "--name" ]]; then
+                                COMPREPLY=()
+                            else
+                                local local_branches
+                                local_branches=$(git branch --format="%(refname:short)" 2>/dev/null)
+                                COMPREPLY=( $(compgen -W "${local_branches} --name" -- "${cur}") )
+                            fi
+                            ;;
+                    esac
+                    ;;
+                remote)
+                    if [[ "${COMP_WORDS[2]}" == "rm" ]]; then
+                        local remotes
+                        remotes=$(git remote 2>/dev/null)
+                        COMPREPLY=( $(compgen -W "${remotes}" -- "${cur}") )
+                    fi
+                    ;;
+                join)
+                    local root_hash root_short hashes
+                    root_hash=$(git rev-list --max-parents=0 HEAD 2>/dev/null | head -n1 || true)
+                    if [ -n "$root_hash" ]; then
+                        root_short=$(git rev-parse --short "$root_hash" 2>/dev/null || true)
+                    fi
+                    hashes=$(git log --pretty=format:'%h' -n 50 2>/dev/null | \
+                             awk -v r="$root_short" 'r=="" || $1 != r')
+                    COMPREPLY=( $(compgen -W "--message ${hashes}" -- "${cur}") )
+                    ;;
+                .)
+                    local unstaged_files
+                    unstaged_files=$(
+                        {
+                            git diff --name-only;
+                            git ls-files --others --exclude-standard;
+                        } 2>/dev/null | sort -u
+                    )
+                    COMPREPLY=( $(compgen -W "${unstaged_files}" -- "${cur}") )
+                    ;;
+                ..)
+                    local staged_files
+                    staged_files=$(git diff --cached --name-only 2>/dev/null)
+                    COMPREPLY=( $(compgen -W "${staged_files}" -- "${cur}") )
+                    ;;
+                *)
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+complete -F _g_completion g
