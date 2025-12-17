@@ -22,40 +22,49 @@ g_conflict() {
                 printf '  %s\n' $files
             fi
             ;;
-        ls)
-            if [ -z "$1" ]; then
-                local files
+        ls|list)
+            shift || true
+            local files
+
+            if [ $# -eq 0 ]; then
                 files=$(command git diff --name-only --diff-filter=U)
                 if [ -z "$files" ]; then
                     echo "No files with conflicts."
-                else
-                    printf '%s\n' $files
+                    return 0
                 fi
             else
-                local file="$1"
+                files="$@"
+            fi
+
+            local file
+            for file in $files; do
                 if [ ! -f "$file" ]; then
                     echo "File '$file' not found." >&2
-                    return 1
+                    continue
                 fi
                 if ! grep -q '^<<<<<<< ' "$file"; then
                     echo "No conflict markers found in '$file'."
-                    return 0
+                    continue
                 fi
+
+                echo "===== Conflicts in $file ====="
                 awk '
                     BEGIN { c = 0; showing = 0 }
                     /^<<<<<<< / {
                         c++
-                        printf "===== Conflict %d (start line %d) =====\n", c, NR
+                        printf "----- Conflict %d (start line %d) -----\n", c, NR
                         showing = 1
                     }
                     showing { print }
                     /^>>>>>>> / {
-                        printf "===== End of conflict %d (line %d) =====\n\n", c, NR
+                        printf "----- End of conflict %d (line %d) -----\n\n", c, NR
                         showing = 0
                     }
                 ' "$file"
-            fi
+            done
             ;;
+
+            
         resolve)
             local git_dir
             git_dir=$(command git rev-parse --git-dir 2>/dev/null) || {
@@ -64,6 +73,16 @@ g_conflict() {
             }
 
             local state_file="$git_dir/g-edit-state"
+
+            if [ -z "$1" ] && [ ! -f "$state_file" ]; then
+                local files
+                files=$(command git diff --name-only --diff-filter=U)
+                if [ -z "$files" ]; then
+                    echo "No files with conflicts to resolve."
+                    return 0
+                fi
+            fi
+
             if [ ! -f "$state_file" ]; then
                 local current_branch
                 current_branch=$(command git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
@@ -352,6 +371,7 @@ g_conflict() {
                 echo "Remember to stage and commit when you are satisfied, then run 'g apply -d' to apply to the original branch."
             fi
             ;;
+ 
         diff)
             local file="$1"
             local tmp_ours tmp_theirs

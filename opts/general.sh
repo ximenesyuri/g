@@ -141,6 +141,17 @@ g_general() {
             fi
             ;;
         .)
+            if [[ "$1" == "-a" || "$1" == "--all" ]]; then
+                shift
+                local repo_root
+                repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+                    echo "Not inside a git repository." >&2
+                    return 1
+                }
+                git -C "$repo_root" add -A
+                echo "Added all modified files to stage."
+                return $?
+            fi
             if [ -z "$1" ]; then
                g info
             elif [[ "$1" == "." ]]; then
@@ -149,16 +160,6 @@ g_general() {
                 else
                     echo "Error adding all changes in \"$PWD\" to the staging area." >&2
                 fi
-            elif [ "$1" = "all" ]; then
-                local repo_root
-                repo_root=$(command git rev-parse --show-toplevel || pwd)
-                pushd "$repo_root" > /dev/null || return 1
-                if command git add .; then
-                    echo "All modified files added to stage."
-                else
-                    echo "Error adding all changes to the staging area." >&2
-                fi
-                popd > /dev/null || return 1
             else
                 if command git add -- "$@"; then
                     local staged_now
@@ -197,6 +198,23 @@ g_general() {
             g branch new "$1"
             ;;
         ..)
+            if [[ "$1" == "-a" || "$1" == "--all" ]]; then
+                shift
+                local repo_root
+                repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+                    echo "Not inside a git repository." >&2
+                    return 1
+                }
+
+                (
+                    cd "$repo_root" || exit 1
+                    g .. . > /dev/null 2>&1
+                )
+                cd - > /dev/null 2>&1
+                echo "All staged files have been unstaged."
+                return $?
+            fi
+
             if [ "$#" -eq 0 ]; then
                 g stage rm
             else
